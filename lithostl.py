@@ -14,12 +14,14 @@ class lithophane():
         else:
             self.image_width  = width
         
-        self.model = None
-        self.image = None
-        self.grayImage = None
-        self._xyz  = None
-        self._front = None
-        self._back  = None
+        self.model      = None
+        self.image      = None
+        self.grayImage  = None
+        self._xyz       = None
+        self._front     = None
+        self._back      = None
+        self._depth     = None
+        self._offset    = None
 
         self.readImage()
 
@@ -45,6 +47,9 @@ class lithophane():
         self.image = resize(self.image, newshape)
 
     def generateSTL(self, depth = 3.0, offset = 0.5, filter_sigma = 0):
+        self._depth = depth
+        self._offset = offset
+
         if self.image_width == None:
             self.image_width = self.image.shape[1]
 
@@ -141,22 +146,30 @@ class lithophane():
         self.model = model
 
 
-    def _makeSphere(self, bottom_radian = 0.85, top_fading = 10, scale_str = 'exp', sigma = 0):
+    def _makeSphere(self, BottomHole = 0.85, TopFading = 10, ScalingFunc = 'exp', FlatBottomBrim = False):
+        """
+        BottomHole:     FLOAT,    % of Bottom Opening
+        TopFading:      INT,      % to add to Sphere for Picture Fading
+        ScalingFunc:    STR,      Scaling Function for Fading
+        """
         x,y,z = self._xyz
-        def fading_function(num, scale_str):
+
+        def fading_function(num, ScalingFunc):
             out = np.zeros(num)
             ### Linear
-            if scale_str == 'linear':
+            if ScalingFunc == 'None':
+                out = np.ones(num)
+            if ScalingFunc == 'linear':
                 out = np.arange(num) / (num)
             ### Exponential
-            if scale_str == 'exp':
+            if ScalingFunc == 'exp':
                 out = np.exp(-7 * (1 - np.arange(num) / (num)))
-            if scale_str == 'poly':
+            if ScalingFunc == 'poly':
                 out = -(1 - np.arange(num) / num)**1.7 + 1
             return out
 
-        Nx_Top = int(x.shape[0] * top_fading / 100)
-        radius = (np.max(x) - np.min(x)) / (2 * np.pi) * (1 + top_fading / 100)
+        Nx_Top = int(x.shape[0] * TopFading / 100)
+        radius = (np.max(x) - np.min(x)) / (2 * np.pi) * (1 + TopFading / 100)
         diameter = 2 * radius
 
         x_range = x.shape[0] + Nx_Top
@@ -176,15 +189,19 @@ class lithophane():
         back_z  [Nx_Top:, :] = z.copy()
 
         for c in range(0, x.shape[1]):
-            if top_fading > 0:
-                front_z[:Nx_Top + 2, c] = z[2, c] * fading_function(Nx_Top + 2, scale_str)
+            if TopFading > 0:
+                front_z[:Nx_Top + 2, c] = z[2, c] * fading_function(Nx_Top + 2, ScalingFunc)
 
-        print(f"Expected Sphere Diameter {diameter}mm")
+        print("Expected Sphere Diameter %.2f mm" % diameter)
 
-        ph = np.array([np.min([float(c) / x_range, bottom_radian]) for c in range(0, x_range)]) * np.pi
+        ph = np.array([np.min([float(c) / x_range, BottomHole]) for c in range(0, x_range)]) * np.pi
         th = np.array([c / (x.shape[1] - 10) * 2 * np.pi for c in range(0, x.shape[1])])
         phs, ths = np.meshgrid(ph, th, indexing = 'ij')
         rs  = radius + front_z
+        
+        ## short bottom for flat bottom
+        if FlatBottomBrim:
+            rs[phs > np.pi * (BottomHole - 0.01)] = radius + self._depth + self._offset
 
         front_x = rs * np.cos(ths) * np.sin(phs)
         front_y = rs * np.cos(phs)
@@ -231,20 +248,20 @@ class lithophane():
         self._front = self._xyz
         self._back  = (back_x, back_y, back_z)
 
-    def generateCoordinates(self):
+    def generateCoordinates(self, **kwargs):
         if self._xyz == None:
             print("STL of image needed to generate Coordinates.")
             print("Run generateSTL()!")
             exit()
 
         if self._lith_type == 'sphere':
-            self._makeSphere()
+            self._makeSphere(**kwargs)
             print("Model Coordinates generated!")
         elif self._lith_type == 'cylinder':
-            self._makeCylinder()
+            self._makeCylinder(**kwargs)
             print("Model Coordinates generated!")
         elif self._lith_type == 'flat':
-            self._makePlane()
+            self._makePlane(**kwargs)
             print("Model Coordinates generated!")
         else:
             print("Type not supported!")
