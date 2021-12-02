@@ -22,24 +22,42 @@ Python Class to create Lithophanes from Images and export them as STL-File.
 `generateModel()`
 
 # Example
-```python
-from lithostl import lithophane
+Running `python lithostl.py -h` creates the following output:
+```bash
+usage: lithostl.py [-h] [-p PICTURE] [-f FORM] [-w WIDTH] [--hrange HRANGE] [-m MINHEIGHT] [-g GFILTER] [-s SCALING] [-t TOPFADING] [-o OUTPUT] [-a APPENDIX]
 
-#### Create Lithophane from Chicken
-lith = lithophane("./example/Chicken.jpg", "flat", width = 40)
+    Lithophane
 
-#### Create Image(xyz) and apply gaussian filter with sigma = 3
-lith.generateSTL(filter_sigma = 3)
+    picture     <STR> ...   Directory to store output
+    form        <STR> ...   Sphere, Cylinder or Flat
+    width       <FLT> ...   Scale Picture to Width (10 pixels = 1 mm)
+    hrange      <FLT> ...   Height Profile minheight + grayscale * hrange
+    minheight   <FLT> ...   Height Profile minheight + grayscale * hrange
+    gfilter     <FLT> ...   Gaussian Filter Width
+    scaling     <STR> ...   Scaling Function for Top Fading (Sphere only)
+    topfading   <FLT> ...   % to add to top for fading (Sphere only)
+    output      <STR> ...   Output Directory
+    apendix     <STR> ...   Append String to Output
 
-#### plot Original Image and gray scale Image
-lith.plotImage(show = False)
 
-#### Create Coordinates for STL Model
-lith.generateCoordinates()
-
-#### Generate STL from coordinates
-lith.generateModel()
-
-#### save STL-File
-lith.save_stl("./example/", append_str = 'flat')
+optional arguments:
+  -h, --help            show this help message and exit
+  -p PICTURE, --picture PICTURE
+                        ''
+  -f FORM, --form FORM  ''
+  -w WIDTH, --width WIDTH
+                        10.0
+  --hrange HRANGE       2.5
+  -m MINHEIGHT, --minheight MINHEIGHT
+                        0.5
+  -g GFILTER, --gfilter GFILTER
+                        0.0
+  -s SCALING, --scaling SCALING
+                        'None'
+  -t TOPFADING, --topfading TOPFADING
+                        0.0
+  -o OUTPUT, --output OUTPUT
+                        './'
+  -a APPENDIX, --appendix APPENDIX
+                        ''
 ```
