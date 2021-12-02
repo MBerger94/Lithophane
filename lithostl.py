@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+
 import numpy as np
 import matplotlib.image as img
 from skimage.transform import resize
 from tqdm import tqdm
 from stl import mesh
+import argh
 
 class lithophane():
 
@@ -202,6 +205,8 @@ class lithophane():
         ## short bottom for flat bottom
         if FlatBottomBrim:
             rs[phs > np.pi * (BottomHole - 0.01)] = radius + self._depth + self._offset
+            print(180 - (BottomHole - 0.01) * 180)
+            print("Bottom Hole Radius %.2f mm" % (radius * np.sin(np.pi * (1 - BottomHole + 0.01))))
 
         front_x = rs * np.cos(ths) * np.sin(phs)
         front_y = rs * np.cos(phs)
@@ -213,7 +218,7 @@ class lithophane():
         self._front = (front_x, front_y, front_z)
         self._back  = (back_x, back_y, back_z)
 
-    def _makeCylinder(self):
+    def _makeCylinder(self, **kwargs):
         x, y, z = self._xyz
 
         front_x = x.copy()
@@ -240,7 +245,7 @@ class lithophane():
         self._front = (front_x, front_y, front_z)
         self._back  = (back_x, back_y, back_z)
 
-    def _makePlane(self):
+    def _makePlane(self, **kwargs):
         back_x = self._xyz[0].copy()
         back_y = self._xyz[1].copy()
         back_z = np.zeros(self._xyz[2].shape)
@@ -318,3 +323,38 @@ class lithophane():
             plt.show()
         else:
             plt.savefig('Images.jpg')
+
+
+def main(picture = '', form = '', width = 10.0, hrange = 2.5, minheight = 0.5, gfilter = 0.0, scaling = 'None', topfading = 0.0, output = './', appendix = ''):
+    """
+    Lithophane
+
+    picture     <STR> ...   Directory to store output
+    form        <STR> ...   Sphere, Cylinder or Flat
+    width       <FLT> ...   Scale Picture to Width (10 pixels = 1 mm)
+    hrange      <FLT> ...   Height Profile minheight + grayscale * hrange
+    minheight   <FLT> ...   Height Profile minheight + grayscale * hrange
+    gfilter     <FLT> ...   Gaussian Filter Width
+    scaling     <STR> ...   Scaling Function for Top Fading (Sphere only)
+    topfading   <FLT> ...   % to add to top for fading (Sphere only)
+    output      <STR> ...   Output Directory
+    apendix     <STR> ...   Append String to Output
+    """
+
+    #### Create Lithophane from Chicken
+    lith = lithophane(picture, form, width = width)
+
+    #### Create Image(xyz) and apply gaussian filter with sigma = 3
+    lith.generateSTL(depth = hrange, offset = minheight, filter_sigma = gfilter)
+
+    #### Create Coordinates for STL Model
+    lith.generateCoordinates(ScalingFunc = scaling, TopFading = topfading)
+
+    #### Generate STL from coordinates
+    lith.generateModel()
+
+    #### save STL-File
+    lith.save_stl(output, append_str = appendix)
+
+if __name__ == '__main__':
+    argh.dispatch_command(main)
