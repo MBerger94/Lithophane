@@ -5,7 +5,7 @@ import matplotlib.image as img
 from skimage.transform import resize
 from tqdm import tqdm
 from stl import mesh
-import argh
+# import argh
 
 class lithophane():
 
@@ -326,20 +326,24 @@ class lithophane():
 
 class revolution_lithophane():
 
-    def __init__(self, picture, sphere_radius = 100, cylinder_radius = 44, cylinder_height = 20, thickness = 2, lithodepth = 2, lithominheight = 0.5):
+    def __init__(self, picture, sphere_radius = 50, cylinder_radius = 11, cylinder_height = 20, lithodepth = 2, lithominheight = 0.5):
         #### units are all mm
         self.picture_dir = picture
+
         self.SphR   = sphere_radius
+
         self.CyR    = cylinder_radius
         self.CyH    = cylinder_height
-        self.thic   = thickness
+
         self.LiD    = lithodepth
         self.LiH    = lithominheight
 
+        self.FiSig  = 0
+
         self.picture = self.readImage()
 
-        self.PiPos  = 0
-        self.PiH    = 80
+        self.PiLocRat  = 0
+        self.PiH    = 150
 
         self.scale_image()
 
@@ -347,12 +351,14 @@ class revolution_lithophane():
 
         self._check_sanity()
 
+        self.model = None
+
     def _check_sanity(self):
         if self.SphR < self.CyR:
             print("Sphere must have larger Radius than Cylinder base!")
             exit()
 
-        if self.PiH > self.SphR:
+        if self.PiH > np.pi * self.SphR:
             print("Image Height cannot be larger than Sphere Radius!")
             exit()
 
@@ -387,28 +393,68 @@ class revolution_lithophane():
             ## Cylinder
             return self.CyR
 
+    def generateSTL(self):
+
+        self.picture = self.picture / np.max(self.picture)
+        self.grayImage = self.rgb_to_gray()
+        # Invert z matrix
+        ngray = 1 - np.double(self.grayImage)
+
+        # scale z matrix
+        z = ngray * self.LiD #+ self.LiH
+
+        # apply Gaussian filter to z matrix
+        if self.FiSig > 0:    
+            from scipy.ndimage import gaussian_filter as gsflt
+            z = gsflt(z, sigma = self.FiSig)
+        
+        # add border of zeros to help with back.
+        # z = np.zeros([z_middle.shape[0] + 2, z_middle.shape[1] + 2])
+        # z[1: -1, 1: -1] = z_middle
+
+
+        x1 = np.linspace(1, z.shape[1] / 10, z.shape[1])
+        y1 = np.linspace(1, z.shape[0] / 10, z.shape[0])
+
+        x, y = np.meshgrid(x1, y1)
+
+        x = np.fliplr(x)
+
+        return x, y, z
+
     def generateCoordinates(self):
 
         vRevFunc = np.vectorize(self.RevFunc)
 
+        x, y, z = self.generateSTL()
+
         intersec = self.SphR + np.sqrt(self.SphR**2 - self.CyR**2)
-        phs = np.linspace(0, 2 * np.pi, num = self.picture.shape[1])
-        xs  = np.linspace(0, intersec + self.CyH, num = self.picture.shape[0] + int((self.SphR - self.PiH) / 10) + int(self.CyH / 10))
+        phs = np.linspace(0, 2 * np.pi, num = z.shape[1])
+        xs  = np.linspace(0, intersec + self.CyH, num = z.shape[0] + int((np.pi * self.SphR - self.PiH) * 10) + int(self.CyH * 10))
 
         phsgrid, xsgrid = np.meshgrid(phs, xs)
+        rsgrid = vRevFunc(xsgrid)
 
-        back_x = np.cos(phsgrid) * (vRevFunc(xsgrid) - self.LiH)
-        back_y = np.sin(phsgrid) * (vRevFunc(xsgrid) - self.LiH)
+        back_x = np.cos(phsgrid) * (rsgrid - self.LiH)
+        back_y = np.sin(phsgrid) * (rsgrid - self.LiH)
         back_z = xsgrid
 
-        front_x = np.cos(phsgrid) * vRevFunc(xsgrid)
-        front_y = np.sin(phsgrid) * vRevFunc(xsgrid)
+        xStart = int((np.pi * self.SphR - self.PiH) * 5)
+        
+        rsgrid[xStart:xStart + z.shape[0]] = rsgrid[xStart:xStart + z.shape[0]] + z
+
+        front_x = np.cos(phsgrid) * rsgrid
+        front_y = np.sin(phsgrid) * rsgrid
         front_z = xsgrid
 
-
+        """
         import matplotlib.pyplot as plt
         from mpl_toolkits.mplot3d import Axes3D
         from mpl_toolkits.axisartist.axislines import Subplot
+
+        plt.imshow(z)
+        plt.colorbar()
+        plt.show()
 
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
@@ -416,13 +462,84 @@ class revolution_lithophane():
         ax.plot_surface(back_x, back_y, back_z)
         ax.plot_surface(front_x, front_y, front_z)
         plt.show()
+        """
 
-        # TODO: Add Picture to Radius
+        self.generateModel([front_x, front_y, front_z], [back_x, back_y, back_z])
 
+    def generateModel(self, front, back):
+        x,   y,  z = front
+        bx, by, bz = back
+
+        count = 0
+        points = np.zeros((((z.shape[0] - 1) * (z.shape[1] - 1) + (bz.shape[0] - 1) * (bz.shape[1] - 1)) + 1, 6, 3))
+        triangles = []
+        bar = tqdm(total = (z.shape[0] - 1) * (z.shape[1] - 1), unit = 'Front Points')
+        for i in range(z.shape[0] - 1):
+            for j in range(z.shape[1] - 1):
+
+                # Triangle 1
+                points[i * (z.shape[1] - 1) + j, 0] = [x[i][j]    , y[i][j]    , z[i][j]]
+                points[i * (z.shape[1] - 1) + j, 1] = [x[i][j + 1], y[i][j + 1], z[i][j + 1]]
+                points[i * (z.shape[1] - 1) + j, 2] = [x[i + 1][j], y[i + 1][j], z[i + 1][j]]
+
+                triangles.append([count, count + 1, count + 2])
+
+                # Triangle 2
+                points[i * (z.shape[1] - 1) + j, 3] = [x[i][j + 1]    , y[i][j + 1]    , z[i][j + 1]]
+                points[i * (z.shape[1] - 1) + j, 4] = [x[i + 1][j + 1], y[i + 1][j + 1], z[i + 1][j + 1]]
+                points[i * (z.shape[1] - 1) + j, 5] = [x[i + 1][j]    , y[i + 1][j]    , z[i + 1][j]]
+
+                triangles.append([count + 3, count + 4, count + 5])
+
+                count += 6
+                bar.update(1)
+        bar.close()
+        idx0 = (z.shape[0] - 1) * (z.shape[1] - 1) + 1
+        # BACK
+        bar = tqdm(total = (bz.shape[0] - 1) * (bz.shape[1] - 1), unit = 'Back Points')
+        for i in range(bz.shape[0] - 1):
+            for j in range(bz.shape[1] - 1):
+
+                # Triangle 1
+                points[idx0 + i * (bz.shape[1] - 1) + j, 0] = [bx[i + 1][j], by[i + 1][j], bz[i + 1][j]]
+                points[idx0 + i * (bz.shape[1] - 1) + j, 1] = [bx[i][j + 1], by[i][j + 1], bz[i][j + 1]]
+                points[idx0 + i * (bz.shape[1] - 1) + j, 2] = [bx[i][j]    , by[i][j]    , bz[i][j]]
+
+                triangles.append([count, count + 1, count + 2])
+
+                # Triangle 2
+                points[idx0 + i * (bz.shape[1] - 1) + j, 3] = [bx[i + 1][j]    , by[i + 1][j]    , bz[i + 1][j]]
+                points[idx0 + i * (bz.shape[1] - 1) + j, 4] = [bx[i + 1][j + 1], by[i + 1][j + 1], bz[i + 1][j + 1]]
+                points[idx0 + i * (bz.shape[1] - 1) + j, 5] = [bx[i][j + 1]    , by[i][j + 1]    , bz[i][j + 1]]
+
+                triangles.append([count + 3, count + 4, count + 5])
+
+                count += 6
+                bar.update(1)
+        bar.close()
+
+        # TODO bottom
+        pts = points.reshape(((z.shape[0] - 1) * (z.shape[1] - 1) + (bz.shape[0] - 1) * (bz.shape[1] - 1) + 1) * 6, 3)
+        # Create the mesh
+        model = mesh.Mesh(np.zeros(len(triangles), dtype = mesh.Mesh.dtype))
+        for i, f in enumerate(triangles):
+            for j in range(3):
+                model.vectors[i][j] = pts[f[j]]
+
+        self.model = model
+
+    def save_stl(self, location, append_str = ''):
+        if append_str == '':
+            out = location + self.picture_dir.split('/')[-1].split('.')[0] + '.stl'
+        else:
+            out = location + self.picture_dir.split('/')[-1].split('.')[0] + '_' + append_str + '.stl'
+        self.model.save(out)
+        print("Model saved to " + out + "!")
         
-l = revolution_lithophane('../Unbenannt4.jpg')
+l = revolution_lithophane('example/Chicken.jpg')
 
 l.generateCoordinates()
+l.save_stl('./examples', append_str = 'Rev')
 
 """
 def main(picture = '', form = '', width = 10.0, hrange = 2.5, minheight = 0.5, gfilter = 0.0, scaling = 'None', topfading = 0.0, output = './', appendix = ''):
