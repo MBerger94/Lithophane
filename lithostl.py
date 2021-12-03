@@ -324,23 +324,109 @@ class lithophane():
         else:
             plt.savefig('Images.jpg')
 
+class revolution_lithophane():
 
+    def __init__(self, picture, sphere_radius = 100, cylinder_radius = 44, cylinder_height = 20, thickness = 2, lithodepth = 2, lithominheight = 0.5):
+        #### units are all mm
+        self.picture_dir = picture
+        self.SphR   = sphere_radius
+        self.CyR    = cylinder_radius
+        self.CyH    = cylinder_height
+        self.thic   = thickness
+        self.LiD    = lithodepth
+        self.LiH    = lithominheight
+
+        self.picture = self.readImage()
+
+        self.PiPos  = 0
+        self.PiH    = 80
+
+        self.scale_image()
+
+        self.GrPi   = self.rgb_to_gray()
+
+        self._check_sanity()
+
+    def _check_sanity(self):
+        if self.SphR < self.CyR:
+            print("Sphere must have larger Radius than Cylinder base!")
+            exit()
+
+        if self.PiH > self.SphR:
+            print("Image Height cannot be larger than Sphere Radius!")
+            exit()
+
+    def readImage(self):
+        return img.imread(self.picture_dir)
+
+    def rgb_to_gray(self):
+        r, g, b = self.picture[:, :, 0], self.picture[:, :, 1], self.picture[:, :, 2]
+        gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        return gray
+
+    def scale_image(self):
+        """
+        Scale image width
+        10 pixels = 1 mm
+        """
+
+        ydim = self.picture.shape[0]
+        xdim = self.picture.shape[1]
+
+        scale = (self.PiH * 10 / xdim)
+        newshape = (int(ydim * scale), int(xdim * scale), 3)
+        self.picture = resize(self.picture, newshape)
+        
+    def RevFunc(self, x):
+        intersec = self.SphR + np.sqrt(self.SphR**2 - self.CyR**2)
+
+        if 0 <= x < intersec:
+            ## Sphere
+            return np.sqrt(self.SphR**2 - (x - self.SphR)**2)
+        elif intersec <= x <= intersec + self.CyH:
+            ## Cylinder
+            return self.CyR
+
+    def generateCoordinates(self):
+
+        vRevFunc = np.vectorize(self.RevFunc)
+
+        intersec = self.SphR + np.sqrt(self.SphR**2 - self.CyR**2)
+        phs = np.linspace(0, 2 * np.pi, num = self.picture.shape[1])
+        xs  = np.linspace(0, intersec + self.CyH, num = self.picture.shape[0] + int((self.SphR - self.PiH) / 10) + int(self.CyH / 10))
+
+        phsgrid, xsgrid = np.meshgrid(phs, xs)
+
+        back_x = np.cos(phsgrid) * (vRevFunc(xsgrid) - self.LiH)
+        back_y = np.sin(phsgrid) * (vRevFunc(xsgrid) - self.LiH)
+        back_z = xsgrid
+
+        front_x = np.cos(phsgrid) * vRevFunc(xsgrid)
+        front_y = np.sin(phsgrid) * vRevFunc(xsgrid)
+        front_z = xsgrid
+
+
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        from mpl_toolkits.axisartist.axislines import Subplot
+
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        # ax2 = fig.add_subplot(projection='3d')
+        ax.plot_surface(back_x, back_y, back_z)
+        ax.plot_surface(front_x, front_y, front_z)
+        plt.show()
+
+        # TODO: Add Picture to Radius
+
+        
+l = revolution_lithophane('../Unbenannt4.jpg')
+
+l.generateCoordinates()
+
+"""
 def main(picture = '', form = '', width = 10.0, hrange = 2.5, minheight = 0.5, gfilter = 0.0, scaling = 'None', topfading = 0.0, output = './', appendix = ''):
-    """
-    Lithophane
-
-    picture     <STR> ...   Directory to store output
-    form        <STR> ...   Sphere, Cylinder or Flat
-    width       <FLT> ...   Scale Picture to Width (10 pixels = 1 mm)
-    hrange      <FLT> ...   Height Profile minheight + grayscale * hrange
-    minheight   <FLT> ...   Height Profile minheight + grayscale * hrange
-    gfilter     <FLT> ...   Gaussian Filter Width
-    scaling     <STR> ...   Scaling Function for Top Fading (Sphere only)
-    topfading   <FLT> ...   % to add to top for fading (Sphere only)
-    output      <STR> ...   Output Directory
-    apendix     <STR> ...   Append String to Output
-    """
-
+    
     #### Create Lithophane from Chicken
     lith = lithophane(picture, form, width = width)
 
@@ -358,3 +444,5 @@ def main(picture = '', form = '', width = 10.0, hrange = 2.5, minheight = 0.5, g
 
 if __name__ == '__main__':
     argh.dispatch_command(main)
+
+"""
