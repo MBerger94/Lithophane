@@ -344,6 +344,10 @@ class revolution_lithophane():
 
         self.PiLocRat  = 0
         self.PiH    = 150
+        self.PiW    = 250
+
+        if self.PiW == None:
+            self.PiW = 2 * np.pi * self.SphR
 
         self.scale_image()
 
@@ -359,8 +363,11 @@ class revolution_lithophane():
             exit()
 
         if self.PiH > np.pi * self.SphR:
-            print("Image Height cannot be larger than Sphere Radius!")
+            print("Image Height cannot be larger than Half Sphere Circumference!")
             exit()
+
+        if self.PiW > 2 * np.pi * self.SphR:
+            print("Image Width cannot be larger than Sphere Cirumference!")
 
     def readImage(self):
         return img.imread(self.picture_dir)
@@ -429,7 +436,7 @@ class revolution_lithophane():
         x, y, z = self.generateSTL()
 
         intersec = self.SphR + np.sqrt(self.SphR**2 - self.CyR**2)
-        phs = np.linspace(0, 2 * np.pi, num = z.shape[1])
+        phs = np.linspace(0, 2 * np.pi, num = z.shape[1] + + int((2 * np.pi * self.SphR - self.PiW) * 10))
         xs  = np.linspace(0, intersec + self.CyH, num = z.shape[0] + int((np.pi * self.SphR - self.PiH) * 10) + int(self.CyH * 10))
 
         phsgrid, xsgrid = np.meshgrid(phs, xs)
@@ -440,29 +447,13 @@ class revolution_lithophane():
         back_z = xsgrid
 
         xStart = int((np.pi * self.SphR - self.PiH) * 5)
+        yStart = int((2 * np.pi * self.SphR - self.PiW) * 5)
         
-        rsgrid[xStart:xStart + z.shape[0]] = rsgrid[xStart:xStart + z.shape[0]] + z
+        rsgrid[xStart:xStart + z.shape[0], yStart:yStart + z.shape[1]] = rsgrid[xStart:xStart + z.shape[0], yStart:yStart + z.shape[1]] + z
 
         front_x = np.cos(phsgrid) * rsgrid
         front_y = np.sin(phsgrid) * rsgrid
         front_z = xsgrid
-
-        """
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        from mpl_toolkits.axisartist.axislines import Subplot
-
-        plt.imshow(z)
-        plt.colorbar()
-        plt.show()
-
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
-        # ax2 = fig.add_subplot(projection='3d')
-        ax.plot_surface(back_x, back_y, back_z)
-        ax.plot_surface(front_x, front_y, front_z)
-        plt.show()
-        """
 
         self.generateModel([front_x, front_y, front_z], [back_x, back_y, back_z])
 
