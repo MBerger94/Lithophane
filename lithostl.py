@@ -9,9 +9,9 @@ import argh
 
 class lithophane_rev():
 
-    def __init__(self, picture, background, sphere_radius = 50, cylinder_radius = 25, cylinder_height = 10, 
-                lithodepth = 3, lithominheight = 1, 
-                sigma = 0, picture_height = 100, picture_width = 0):
+    def __init__(self, picture, background, sphere_radius, cylinder_radius, cylinder_height, 
+                lithodepth, lithominheight, 
+                sigma, picture_height, picture_width):
         #### units are all mm
         self.picture_dir = picture
         self.background_dir = background
@@ -223,10 +223,7 @@ class lithophane_rev():
         self.model.save(out)
         print("Model saved to " + out + "!")
         
-# l = revolution_lithophane('../Unbenannt4.jpg')
 
-# l.generateCoordinates()
-# l.save_stl('./examples', append_str = 'Rev-Sig-3')
 
 
 def main(picture = '', background = '', radius = 50, base_rad = 25, base_height = 10, litho_depth = 3, litho_min_height = 1, sigma = 0, picture_height = 100, picture_width = 0, output = './', appendix = ''):
