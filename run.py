@@ -1,29 +1,12 @@
-from lithostl import lithophane
+from lithostl import lithophane_rev
 
 #### Create Lithophane from Chicken
-lith = lithophane("./example/Chicken.jpg", "flat", width = 40)
-
-#### Create Image(xyz) and apply gaussian filter with sigma = 3
-lith.generateSTL(filter_sigma = 3)
-
-#### plot Original Image and gray scale Image
-lith.plotImage(show = False)
+lith = lithophane_rev(picture = 'example/Chicken.jpg', background = '', sigma = 0, picture_height = 100, picture_width = 0,
+                        sphere_radius = 50, cylinder_radius = 25, cylinder_height = 10,
+                        lithodepth = 3, lithominheight = 1)
 
 #### Create Coordinates for STL Model
 lith.generateCoordinates()
 
-#### Generate STL from coordinates
-lith.generateModel()
-
 #### save STL-File
-lith.save_stl("./example/", append_str = 'flat')
-
-
-#### Change Build - Form of Lithophane
-lith.lith_type = "sphere"
-
-#### Build STL from Chicken now as Sphere
-lith.generateSTL()
-lith.generateCoordinates()
-lith.generateModel()
-lith.save_stl("./example/", append_str = 'sphere')
+lith.save_stl('example/', append_str = '')
